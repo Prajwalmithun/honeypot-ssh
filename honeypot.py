@@ -7,9 +7,18 @@ import traceback
 import logging
 import json
 import paramiko
+import re
+import redis
 from datetime import datetime
 from binascii import hexlify
 from paramiko.py3compat import b, u, decodebytes
+
+
+REDIS_HOST=os.environ.get("REDIS_HOST")
+REDIS_PORT=os.environ.get("REDIS_PORT")
+REDIS_PASSWORD=os.environ.get("REDIS_PASSWORD")
+r = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
+
 
 HOST_KEY = paramiko.RSAKey(filename='server.key')
 SSH_BANNER = "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.1"
@@ -26,6 +35,32 @@ logging.basicConfig(
     level=logging.INFO,
     filename='ssh_honeypot.log')
 
+
+'''
+method : detect_url(command, client_ip)
+
+usage : Once the attacker SSHs to the honeypot, he may try to download the malware and upload it to hoenypot.
+        This method detects the URL of the malware that attacker tries to download
+'''
+def detect_url(command, client_ip):
+    regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+    result = re.findall(regex, command)
+    if result:
+        for ar in result:
+            for url in ar:
+                if url != '':
+                    logging.info('New URL detected ({}): '.format(client_ip, url))
+                    r.lpush("download_queue", url)
+
+    ip_regex = r"([0-9]+(?:\.[0-9]+){3}\/\S*)"
+    ip_result = re.findall(ip_regex, command)
+    if ip_result:
+        for ip_url in ip_result:
+            if ip_url != '':
+                logging.info('New IP-based URL detected ({}): '.format(client_ip, ip_url))
+                r.lpush("download_queue", ip_url)
+
+
 '''
 method : handle_cmd(cmd, chan, ip) 
 
@@ -33,7 +68,7 @@ Usage : Emulating the commands. Say, an attack logs into the honeypot and tries 
         UNIX commands are implemented using this function.
 '''
 def handle_cmd(cmd, chan, ip):
-
+    detect_url(cmd,ip)
     response = ""
     if cmd.startswith("ls"):
         response = "users.txt"
@@ -44,6 +79,7 @@ def handle_cmd(cmd, chan, ip):
         logging.info('Response from honeypot ({}): '.format(ip, response))
         response = response + "\r\n"
     chan.send(response)
+
 
 
 class BasicSshHoneypot(paramiko.ServerInterface):

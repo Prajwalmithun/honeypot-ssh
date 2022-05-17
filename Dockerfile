@@ -20,4 +20,4 @@ COPY . .
 
 #CMD ["honeypot.py","-p","2222"]
 
-ENTRYPOINT ["python3","honeypot.py","-p","2222"]
+#ENTRYPOINT ["python3","honeypot.py","-p","2222"]
