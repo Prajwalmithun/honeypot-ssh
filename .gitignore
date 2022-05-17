@@ -1,3 +1,7 @@
 venv
 server.key
 server.pub
+ssh_honeypot.log
+venv
+uploaded_files
+ssh_honeypot_downloader.log

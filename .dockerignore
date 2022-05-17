@@ -1,2 +1,4 @@
 ssh_honeypot.log
 venv
+uploaded_files
+ssh_honeypot_downloader.log
